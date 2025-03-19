@@ -1,14 +1,15 @@
-import { Moon, Sun, Bot, Send, ChevronDown, PanelLeftOpen, PanelLeftClose } from 'lucide-react';
+import { Moon, Sun, Bot, Send, ChevronDown, PanelLeftOpen, PanelLeftClose, Sparkles, Loader2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Textarea } from '@/components/ui/textarea';
+import { AutoResizeTextarea } from '@/components/ui/auto-resize-textarea';
 import { useToast } from '@/hooks/use-toast';
-import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatList } from '@/components/chat/ChatList';
 import { Chat, Message } from '@/types/chat';
-import { sendMessage } from '@/lib/api';
+import { sendStreamMessage, saveChats, loadChats, deleteChat, clearAllChats } from '@/lib/api';
+import { MessageSound } from '@/components/chat/MessageSound';
+import { ChatContainer } from '@/components/chat/ChatContainer';
 
 function App() {
   const [chats, setChats] = useState<Chat[]>([]);
@@ -17,11 +18,61 @@ function App() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isScrolledUp, setIsScrolledUp] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingContent, setStreamingContent] = useState('');
+  const [playSentSound, setPlaySentSound] = useState(false);
+  const [playReceivedSound, setPlayReceivedSound] = useState(false);
+  const [isLoadingChats, setIsLoadingChats] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
   const currentChat = chats.find(chat => chat.id === currentChatId);
+
+  // Load chats from local storage on initial render
+  useEffect(() => {
+    const loadSavedChats = async () => {
+      setIsLoadingChats(true);
+      try {
+        // Simulate network delay for demo purposes
+        await new Promise(resolve => setTimeout(resolve, 800));
+
+        const savedChats = loadChats();
+        if (savedChats.length > 0) {
+          setChats(savedChats);
+          setCurrentChatId(savedChats[0].id);
+        } else {
+          createNewChat();
+        }
+      } catch (error) {
+        console.error('Error loading chats:', error);
+        toast({
+          title: 'Error loading chats',
+          description: 'Failed to load your chat history.',
+          duration: 3000,
+        });
+        createNewChat();
+      } finally {
+        setIsLoadingChats(false);
+      }
+    };
+
+    loadSavedChats();
+
+    // Check system dark mode preference
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (prefersDark) {
+      setIsDarkMode(true);
+      document.documentElement.classList.add('dark');
+    }
+  }, []);
+
+  // Save chats whenever they change
+  useEffect(() => {
+    if (chats.length > 0) {
+      saveChats(chats);
+    }
+  }, [chats]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -41,7 +92,7 @@ function App() {
       createdAt: new Date(),
       updatedAt: new Date(),
     };
-    setChats(prev => [...prev, newChat]);
+    setChats(prev => [newChat, ...prev]);
     setCurrentChatId(newChat.id);
   };
 
@@ -53,10 +104,51 @@ function App() {
     );
   };
 
+  const handleDeleteChat = (chatId: string) => {
+    const updatedChats = deleteChat(chatId);
+    setChats(updatedChats);
+
+    // If the deleted chat was the current one, select the next available chat
+    if (chatId === currentChatId) {
+      setCurrentChatId(updatedChats.length > 0 ? updatedChats[0].id : null);
+
+      // If no chats left, create a new one
+      if (updatedChats.length === 0) {
+        createNewChat();
+      }
+    }
+
+    toast({
+      title: 'Chat deleted',
+      description: 'The chat has been removed.',
+      duration: 3000,
+    });
+  };
+
+  const handleClearAllChats = () => {
+    clearAllChats();
+    setChats([]);
+    createNewChat();
+
+    toast({
+      title: 'All chats cleared',
+      description: 'Your chat history has been cleared.',
+      duration: 3000,
+    });
+  };
+
+  const toggleSidebar = () => {
+    setIsSidebarOpen(!isSidebarOpen);
+  };
+
   const handleSend = async () => {
     if (!input.trim() || !currentChatId) return;
 
-    const newMessage: Message = {
+    // Trigger sent sound
+    setPlaySentSound(true);
+    setTimeout(() => setPlaySentSound(false), 300);
+
+    const userMessage: Message = {
       id: Date.now().toString(),
       content: input,
       sender: 'user',
@@ -64,34 +156,84 @@ function App() {
     };
 
     // Update chat with user message
-    const updatedMessages = [...(currentChat?.messages || []), newMessage];
+    const updatedMessages = [...(currentChat?.messages || []), userMessage];
     updateChat(currentChatId, {
       messages: updatedMessages,
       updatedAt: new Date(),
       title: updatedMessages.length === 1 ? input.slice(0, 30) : currentChat?.title,
     });
 
+    // Create AI message placeholder
+    const aiMessageId = (Date.now() + 1).toString();
+    const aiMessage: Message = {
+      id: aiMessageId,
+      content: '',  // Initially empty
+      sender: 'ai',
+      timestamp: new Date(),
+    };
+
+    // Add empty AI message
+    updateChat(currentChatId, {
+      messages: [...updatedMessages, aiMessage],
+      updatedAt: new Date(),
+    });
+
     setInput('');
+    setIsStreaming(true);
+    setStreamingContent('');
 
     try {
-      // Get AI response
-      const response = await sendMessage(input);
-      const aiMessage: Message = {
-        id: response.id,
-        content: response.choices[0].message.content,
-        sender: 'ai',
-        timestamp: new Date(),
-      };
-      
+      // Use streaming response API with chat history for context
+      await sendStreamMessage(
+        input,
+        // Send previous messages for context (excluding the empty AI message)
+        updatedMessages,
+        (chunk) => {
+          // Update message content with each new chunk
+          setStreamingContent(prev => prev + chunk);
+
+          // Also update the message in the chat
+          updateChat(currentChatId, {
+            messages: [...updatedMessages, {
+              ...aiMessage,
+              content: streamingContent + chunk,
+            }],
+            updatedAt: new Date(),
+          });
+        }
+      );
+
+      // Streaming complete
+      setIsStreaming(false);
+
+      // Ensure the final message contains the complete content
       updateChat(currentChatId, {
-        messages: [...updatedMessages, aiMessage],
+        messages: [...updatedMessages, {
+          ...aiMessage,
+          content: streamingContent,
+        }],
         updatedAt: new Date(),
       });
+
+      // Trigger received sound when AI message is complete
+      setPlayReceivedSound(true);
+      setTimeout(() => setPlayReceivedSound(false), 300);
     } catch (error) {
+      // Handle error
+      setIsStreaming(false);
       toast({
         title: 'Error',
-        description: 'Failed to get AI response',
+        description: 'Failed to get AI response.',
         duration: 3000,
+      });
+
+      // Add error message
+      updateChat(currentChatId, {
+        messages: [...updatedMessages, {
+          ...aiMessage,
+          content: 'Sorry, I encountered an issue and couldn\'t respond to your request. Please try again later.',
+        }],
+        updatedAt: new Date(),
       });
     }
   };
@@ -111,47 +253,81 @@ function App() {
     });
   };
 
-  useEffect(() => {
-    if (chats.length === 0) {
-      createNewChat();
-    }
-  }, []);
-
   return (
     <div className={cn(
-      'flex h-screen flex-col bg-background transition-colors duration-300',
+      'flex h-screen flex-col bg-gradient-to-br from-background to-background/90 transition-colors duration-500',
       isDarkMode ? 'dark' : ''
     )}>
+      {/* Sound effects */}
+      <MessageSound play={playSentSound} soundType="sent" />
+      <MessageSound play={playReceivedSound} soundType="received" />
+
+      {/* Sidebar */}
       <aside
         className={cn(
-          'fixed left-0 top-0 z-20 h-full w-64 transform border-r bg-background transition-transform duration-300',
-          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          'fixed left-0 top-0 z-40 h-full transform border-r bg-background/95 backdrop-blur-md transition-all duration-300 shadow-lg lg:z-30',
+          'w-72 lg:w-72',
+          isSidebarOpen
+            ? 'translate-x-0'
+            : '-translate-x-full'
         )}
       >
         <div className="flex h-14 items-center border-b px-4">
-          <h2 className="font-semibold">Chat History</h2>
+          <h2 className="font-semibold flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary animate-pulse" />
+            <span>Chat History</span>
+          </h2>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleSidebar}
+            className="ml-auto"
+          >
+            <PanelLeftClose className="h-5 w-5" />
+          </Button>
         </div>
-        <div className="p-4">
-          <ChatList
-            chats={chats}
-            currentChatId={currentChatId}
-            onSelectChat={setCurrentChatId}
-            onNewChat={createNewChat}
-          />
+        <div className="h-[calc(100vh-3.5rem)] overflow-y-auto">
+          <div className="p-4">
+            <ChatList
+              chats={chats}
+              currentChatId={currentChatId}
+              onSelectChat={(id) => {
+                setCurrentChatId(id);
+                setIsSidebarOpen(false); // Close sidebar after selection on mobile
+              }}
+              onNewChat={() => {
+                createNewChat();
+                setIsSidebarOpen(false); // Close sidebar after creating new chat on mobile
+              }}
+              onDeleteChat={handleDeleteChat}
+              onClearAllChats={handleClearAllChats}
+              isLoading={isLoadingChats}
+            />
+          </div>
         </div>
       </aside>
 
+      {/* Sidebar overlay */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 lg:hidden bg-background/80 backdrop-blur-sm z-30 transition-opacity duration-300"
+          onClick={toggleSidebar}
+        />
+      )}
+
       {/* Header */}
-      <header className="fixed top-0 z-10 w-full border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="fixed top-0 z-20 w-full border-b bg-background/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/60 shadow-sm">
         <div className={cn(
-          'container flex h-14 items-center',
-          isSidebarOpen && 'ml-64 transition-[margin] duration-300'
+          'flex h-14 max-w-[100vw] items-center px-4',
+          isSidebarOpen ? 'lg:pl-80' : '',
+          'transition-all duration-300'
         )}>
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="mr-2"
+            onClick={toggleSidebar}
+            className="mr-2 transition-transform hover:scale-105"
+            aria-label={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
           >
             {isSidebarOpen ? (
               <PanelLeftClose className="h-5 w-5" />
@@ -160,20 +336,20 @@ function App() {
             )}
           </Button>
           <div className="flex items-center gap-2 font-bold">
-            <Bot className="h-6 w-6 animate-pulse text-primary" />
-            <span className="hidden sm:inline-block">AI Chat Assistant</span>
+            <Bot className="h-6 w-6 text-primary animate-bounce" />
+            <span className="hidden sm:inline-block bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">AI Chat Assistant</span>
           </div>
           <div className="flex flex-1 items-center justify-end">
             <Button
               variant="ghost"
               size="icon"
               onClick={toggleTheme}
-              className="transition-transform hover:scale-110"
+              className="transition-transform hover:scale-110 hover:rotate-12"
             >
               {isDarkMode ? (
-                <Sun className="h-5 w-5" />
+                <Sun className="h-5 w-5 text-yellow-400" />
               ) : (
-                <Moon className="h-5 w-5" />
+                <Moon className="h-5 w-5 text-indigo-600" />
               )}
             </Button>
           </div>
@@ -182,47 +358,51 @@ function App() {
 
       {/* Main Chat Area */}
       <main className={cn(
-        'container flex-1 pt-16 pb-16',
-        isSidebarOpen && 'ml-64 transition-[margin] duration-300'
+        'relative z-10 min-h-screen pt-14 pb-20',
+        isSidebarOpen ? 'lg:pl-72' : '',
+        'transition-all duration-300'
       )}>
-        <ScrollArea
-          ref={scrollAreaRef}
-          className="h-full rounded-lg border bg-muted/50"
-          onScroll={handleScroll}
-        >
-          <div className="flex flex-col gap-4 p-4">
-            {currentChat?.messages.map((message) => (
-              <ChatMessage
-                key={message.id}
-                message={message}
-                isCurrentChat={true}
-              />
-            ))}
-            <div ref={messagesEndRef} />
-          </div>
-        </ScrollArea>
-
-        {/* Scroll to Bottom Button */}
-        {isScrolledUp && (
-          <Button
-            variant="secondary"
-            size="icon"
-            className="fixed bottom-20 right-4 z-10 rounded-full shadow-lg transition-transform hover:scale-110"
-            onClick={scrollToBottom}
+        <div className={cn(
+          'container h-full py-4',
+          isSidebarOpen ? 'lg:pr-4 lg:pl-4' : 'px-4'
+        )}>
+          <ScrollArea
+            ref={scrollAreaRef}
+            className="h-[calc(100vh-8.5rem)] rounded-lg border bg-background/5 shadow-inner"
+            onScroll={handleScroll}
           >
-            <ChevronDown className="h-4 w-4" />
-          </Button>
-        )}
+            <ChatContainer
+              currentChat={currentChat}
+              isStreaming={isStreaming}
+              messagesEndRef={messagesEndRef}
+            />
+          </ScrollArea>
+
+          {/* Scroll to Bottom Button */}
+          {isScrolledUp && (
+            <Button
+              variant="secondary"
+              size="icon"
+              className="fixed bottom-24 right-6 z-10 rounded-full shadow-lg transition-transform hover:scale-110 animate-bounce-slow"
+              onClick={scrollToBottom}
+            >
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </main>
 
       {/* Input Area */}
       <footer className={cn(
-        'fixed bottom-0 right-0 border-t bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60',
-        isSidebarOpen ? 'left-64' : 'left-0',
-        'transition-[left] duration-300'
+        'fixed bottom-0 right-0 z-20 w-full border-t bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80 shadow-lg',
+        'transition-all duration-300'
       )}>
-        <div className="container flex gap-2 py-4 pr-4">
-          <Textarea
+        <div className={cn(
+          'flex gap-2 p-2 sm:p-4 mx-auto',
+          isSidebarOpen ? 'lg:pl-80' : 'px-4',
+          'transition-all duration-300'
+        )}>
+          <AutoResizeTextarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
@@ -232,14 +412,22 @@ function App() {
               }
             }}
             placeholder="Type your message..."
-            className="min-h-10 max-h-32 resize-none"
+            className="min-h-[40px] max-h-[120px] sm:max-h-[200px] resize-none rounded-lg border-primary/20 focus:border-primary focus:ring-2 focus:ring-primary/30 transition-shadow text-sm sm:text-base"
+            disabled={isStreaming}
           />
           <Button
-            disabled={!currentChatId}
+            disabled={!currentChatId || isStreaming || !input.trim()}
             onClick={handleSend}
-            className="shrink-0 transition-transform hover:scale-105"
+            className={cn(
+              "shrink-0 transition-all px-2 sm:px-4",
+              isStreaming ? "opacity-50" : "hover:scale-105 hover:shadow-md hover:shadow-primary/20"
+            )}
           >
-            <Send className="h-4 w-4" />
+            {isStreaming ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
             <span className="ml-2 hidden sm:inline-block">Send</span>
           </Button>
         </div>
