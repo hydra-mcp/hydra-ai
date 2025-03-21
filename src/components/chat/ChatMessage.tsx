@@ -101,7 +101,7 @@ export function ChatMessage({
           )}
         </div>
         <time className="mt-1 block text-right text-xs opacity-50">
-          {message.timestamp.toLocaleTimeString()}
+          {new Date(message.createdAt).toLocaleTimeString()}
         </time>
       </div>
     </div>
