@@ -5,6 +5,7 @@ import { Login } from './Login';
 import { AppLayout } from '@/layouts/AppLayout';
 import { ChatPage } from '@/pages/ChatPage';
 import { Toaster } from '@/components/ui/toaster';
+import { ErrorHandler } from '@/components/ErrorHandler';
 
 function App() {
   return (
@@ -12,6 +13,9 @@ function App() {
       <AuthProvider>
         {/* Global Toaster for notifications */}
         <Toaster />
+
+        {/* Global API error handler */}
+        <ErrorHandler />
 
         <Routes>
           {/* Public Routes */}

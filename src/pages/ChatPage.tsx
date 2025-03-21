@@ -1,4 +1,4 @@
-import { Send, ChevronDown, Sparkles, Loader2 } from 'lucide-react';
+import { Send, ChevronDown, Sparkles, Loader2, Info, CheckCircle } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ChatList } from '@/components/chat/ChatList';
 import { Chat, Message } from '@/types/chat';
 import { sendStreamMessage, saveChats, loadChats, deleteChat, clearAllChats } from '@/lib/api';
-import { ChatContainer } from '@/components/chat/ChatContainer';
+import { ChatContainer, ProcessingStage } from '@/components/chat/ChatContainer';
 import { useOutletContext } from 'react-router-dom';
 
 interface SidebarContext {
@@ -32,6 +32,7 @@ export function ChatPage() {
     const { toast } = useToast();
     const [isManualScrolling, setIsManualScrolling] = useState(false);
     const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const [processingStage, setProcessingStage] = useState<Array<ProcessingStage>>([]);
 
     const currentChat = chats.find(chat => chat.id === currentChatId);
 
@@ -105,8 +106,8 @@ export function ChatPage() {
             id: Date.now().toString(),
             title: 'New Chat',
             messages: [],
-            createdAt: new Date(),
-            updatedAt: new Date(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
         };
         setChats(prev => [newChat, ...prev]);
         setCurrentChatId(newChat.id);
@@ -114,31 +115,44 @@ export function ChatPage() {
 
     const updateChat = (chatId: string, updates: Partial<Chat>) => {
         if (isStreaming && updates.messages && currentChatId === chatId) {
-            // During streaming, only update the last message content to reduce re-renders
-            setChats(prev =>
-                prev.map(chat => {
+            // ，
+            setChats(prev => {
+                // 
+                const newChats = prev.map(chat => {
                     if (chat.id === chatId) {
-                        // Get the updated messages
+                        // 
                         const updatedMessages = updates.messages;
 
-                        // If this is a streaming update, only update the last message
-                        if (updatedMessages && chat.messages.length > 0 && updatedMessages.length === chat.messages.length) {
+                        // （）
+                        if (updatedMessages && chat.messages.length > 0 &&
+                            updatedMessages.length === chat.messages.length) {
+                            // 
                             const lastMessageIndex = updatedMessages.length - 1;
+                            // 
                             const newMessages = [...chat.messages];
+                            // 
                             newMessages[lastMessageIndex] = updatedMessages[lastMessageIndex];
 
+                            // 
                             return {
                                 ...chat,
                                 ...updates,
                                 messages: newMessages,
+                                updatedAt: new Date().toISOString() // 
                             };
                         }
+
+                        // ，
+                        return { ...chat, ...updates };
                     }
-                    return chat.id === chatId ? { ...chat, ...updates } : chat;
-                })
-            );
+                    // 
+                    return chat;
+                });
+
+                return newChats;
+            });
         } else {
-            // For non-streaming updates, update normally
+            // ，
             setChats(prev =>
                 prev.map(chat =>
                     chat.id === chatId ? { ...chat, ...updates } : chat
@@ -191,63 +205,155 @@ export function ChatPage() {
             id: Date.now().toString(),
             content: input,
             sender: 'user',
-            timestamp: new Date(),
+            createdAt: new Date().toISOString(),
         };
 
         // Update chat with user message
         const updatedMessages = [...(currentChat?.messages || []), userMessage];
         updateChat(currentChatId, {
             messages: updatedMessages,
-            updatedAt: new Date(),
+            updatedAt: new Date().toISOString(),
             title: updatedMessages.length === 1 ? input.slice(0, 30) : currentChat?.title,
         });
 
-        // Create AI message placeholder
+        // Create AI message placeholder - ，
         const aiMessageId = (Date.now() + 1).toString();
         const aiMessage: Message = {
             id: aiMessageId,
-            content: '',  // Initially empty
+            content: '', // ，"..."
             sender: 'ai',
-            timestamp: new Date(),
+            createdAt: new Date().toISOString(),
         };
 
-        // Add empty AI message
+        // AI
         updateChat(currentChatId, {
             messages: [...updatedMessages, aiMessage],
-            updatedAt: new Date(),
+            updatedAt: new Date().toISOString(),
         });
 
         setInput('');
         setIsStreaming(true);
-        setStreamingContent('');
+        setStreamingContent(''); // 
+        setProcessingStage([{
+            message: 'AI is processing your request...',
+            content: '',
+            status: 0
+        }]); // ，
+
+        let hasReceivedContent = false; // 
 
         try {
             // Use streaming response API with chat history for context
             await sendStreamMessage(
                 input,
-                // Send previous messages for context (excluding the empty AI message)
+                // Send previous messages for context
                 updatedMessages,
                 (chunk) => {
-                    // Update streaming content state with accumulated content
-                    setStreamingContent(prev => {
-                        const newContent = prev + chunk;
+                    //  SSE 
+                    console.log("Received chunk:", chunk); // 
 
-                        // Also update the message in the chat with accumulated content
-                        updateChat(currentChatId, {
-                            messages: [...updatedMessages, {
-                                ...aiMessage,
-                                content: newContent,
-                            }],
-                            updatedAt: new Date(),
-                        });
+                    try {
+                        const jsonData = JSON.parse(chunk);
+                        console.log("Parsed JSON data:", jsonData); // 
 
-                        return newContent;
-                    });
+                        // stage - typestage
+                        if (jsonData.type === 'stage') {
+                            // state
+                            //  content  stage， ， content ，
+                            setProcessingStage(prevStages => {
+                                // content，contentstage
+                                // if (jsonData.content === '') {
+                                //     return prevStages.filter(stage => stage.content !== jsonData.content);
+                                // }
+
+                                const existingStage = prevStages.find(stage => stage.content === jsonData.content);
+                                if (existingStage) {
+                                    // contentstage，
+                                    return prevStages.map(stage =>
+                                        stage.content === jsonData.content ? {
+                                            ...stage,
+                                            message: jsonData.message,
+                                            status: jsonData.status
+                                        } : stage
+                                    );
+                                } else {
+                                    // stage
+                                    return [...prevStages, {
+                                        message: jsonData.message,
+                                        content: jsonData.content,
+                                        status: jsonData.status
+                                    }];
+                                }
+                            });
+                            console.log("Processing stage:", jsonData.content); // 
+                            return; // ，
+                        }
+
+                        // 
+                        switch (jsonData.type) {
+                            case 'content':
+                                //  - 
+                                if (jsonData.content) {
+                                    handleContentUpdate(jsonData.content);
+                                    hasReceivedContent = true;
+                                }
+                                break;
+
+                            case 'error':
+                                // 
+                                console.error("Error from API:", jsonData.error);
+                                toast({
+                                    title: 'Error',
+                                    description: jsonData.error?.message || 'An error occurred',
+                                    duration: 3000,
+                                });
+
+                                // AI
+                                updateChat(currentChatId, {
+                                    messages: [...updatedMessages, {
+                                        ...aiMessage,
+                                        content: `Error: ${jsonData.error?.message || 'An unknown error occurred'}`,
+                                    }],
+                                    updatedAt: new Date().toISOString(),
+                                });
+                                break;
+
+                            case 'done':
+                                //  - onmessage[DONE]
+                                console.log("Stream completed");
+                                break;
+
+                            default:
+                                // 
+                                // delta
+                                if (jsonData.choices && jsonData.choices[0]?.delta?.content) {
+                                    const content = jsonData.choices[0].delta.content;
+                                    if (content) {
+                                        handleContentUpdate(content);
+                                        hasReceivedContent = true;
+                                    }
+                                }
+                        }
+                    } catch (e) {
+                        // JSON，
+                        console.log("JSON parse error, using raw chunk:", e); // 
+                        if (typeof chunk === 'string' && chunk.trim()) {
+                            // ，
+                            handleContentUpdate(chunk);
+                            hasReceivedContent = true;
+                        }
+                    }
                 }
             );
 
+            // ，
+            if (!hasReceivedContent) {
+                handleContentUpdate("，。");
+            }
+
             // Streaming complete
             setIsStreaming(false);
+            setProcessingStage([]);
 
             // Trigger received sound when AI message is complete
             setPlayReceivedSound(true);
@@ -255,6 +361,7 @@ export function ChatPage() {
         } catch (error) {
             // Handle error
             setIsStreaming(false);
+            setProcessingStage([]);
             toast({
                 title: 'Error',
                 description: 'Failed to get AI response.',
@@ -267,9 +374,48 @@ export function ChatPage() {
                     ...aiMessage,
                     content: 'Sorry, I encountered an issue and couldn\'t respond to your request. Please try again later.',
                 }],
-                updatedAt: new Date(),
+                updatedAt: new Date().toISOString(),
             });
         }
+    };
+
+    // 
+    const handleContentUpdate = (content: string) => {
+        if (!content || !currentChatId) return;
+
+        // 
+        setStreamingContent(prev => {
+            const newContent = prev + content;
+
+            //  - AI
+            if (currentChat?.messages && currentChat.messages.length > 0) {
+                const lastMessage = currentChat.messages[currentChat.messages.length - 1];
+
+                // AI，
+                if (lastMessage.sender === 'ai') {
+                    updateChat(currentChatId, {
+                        messages: [...currentChat.messages.slice(0, -1), {
+                            ...lastMessage,
+                            content: newContent,
+                        }],
+                        updatedAt: new Date().toISOString(),
+                    });
+                } else {
+                    // AI，AI
+                    updateChat(currentChatId, {
+                        messages: [...currentChat.messages, {
+                            id: Date.now().toString(),
+                            content: newContent,
+                            sender: 'ai',
+                            createdAt: new Date().toISOString(),
+                        }],
+                        updatedAt: new Date().toISOString(),
+                    });
+                }
+            }
+
+            return newContent;
+        });
     };
 
     // Auto-scroll effect
@@ -367,6 +513,7 @@ export function ChatPage() {
                                 isStreaming={isStreaming}
                                 messagesEndRef={messagesEndRef}
                                 onNewChat={createNewChat}
+                                processingStage={processingStage}
                             />
                         </div>
                     </ScrollArea>
@@ -391,6 +538,20 @@ export function ChatPage() {
                 isSidebarOpen ? 'lg:left-72' : 'left-0',
                 'right-0 transition-all duration-300'
             )}>
+                {/* {processingStage && (
+                    <div className="w-full py-1.5 px-4 flex items-center gap-2 text-xs border-b border-primary/10">
+                        <div className="container mx-auto flex items-center gap-2 text-primary">
+                            {processingStage.map(stage => stage.message).includes('') ? (
+                                <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+                            ) : (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            )}
+                            <span className={processingStage.map(stage => stage.message).includes('') ? 'text-green-600 font-medium' : 'animate-pulse'}>
+                                {processingStage.map(stage => stage.message).join(' - ')}
+                            </span>
+                        </div>
+                    </div>
+                )} */}
                 <div className="container mx-auto flex gap-2 py-2 sm:py-4">
                     <div className="flex gap-2 w-full px-4">
                         <AutoResizeTextarea

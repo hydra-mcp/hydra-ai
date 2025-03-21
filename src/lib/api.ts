@@ -1,4 +1,11 @@
+import { SSE } from '@/lib/sse';
 import { Chat, Message, OpenAIResponse } from '@/types/chat';
+import { triggerApiError } from '@/components/ErrorHandler';
+
+// Add type definition for SSE events
+interface SSEvent extends CustomEvent {
+  data?: string;
+}
 
 // Development mock data
 const MOCK_DELAY = 1000;
@@ -87,6 +94,10 @@ export async function apiRequest<T>(
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('user_info');
+
+        // Trigger global API error event, not redirect directly
+        triggerApiError('Authentication failed, please login again', 401, endpoint);
+
         throw new Error('Authentication failed, please login again');
       }
     }
@@ -94,11 +105,14 @@ export async function apiRequest<T>(
     // Handle other errors
     if (!response.ok) {
       const errorBody = await response.json().catch(() => ({}));
-      throw new Error(
-        errorBody.message ||
+      const errorMessage = errorBody.message ||
         errorBody.error ||
-        `API request failed with status ${response.status}`
-      );
+        `API request failed with status ${response.status}`;
+
+      // Trigger global API error event
+      triggerApiError(errorMessage, response.status, endpoint);
+
+      throw new Error(errorMessage);
     }
 
     // For 204 and empty responses, return empty object
@@ -192,164 +206,259 @@ export async function mockStreamResponse(message: string, onChunk: (chunk: strin
   };
 }
 
-// Real OpenAI API request with chat history
+// Stream message request implemented using SSE.ts
 export async function sendStreamMessage(
   message: string,
   chatHistory: Message[],
   onChunk: (chunk: string) => void
 ): Promise<OpenAIResponse> {
-  // Use environment variables or configuration for API key
+  // Get API URL using environment variable or configuration
   const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
 
-  // Use mock data in development environment if no API key
+  // If not authenticated, use mock data
   if (!isAuthenticated()) {
     return mockStreamResponse(message, onChunk);
   }
 
-  try {
-    // Convert chat history to OpenAI format
-    const messages = chatHistory.map(msg => ({
-      role: msg.sender === 'user' ? 'user' : 'assistant',
-      content: msg.content
-    }));
+  // Return Promise
+  return new Promise((resolve, reject) => {
+    try {
+      // Convert chat history to OpenAI format
+      const messages = chatHistory.map(msg => ({
+        role: msg.sender === 'user' ? 'user' : 'assistant',
+        content: msg.content
+      }));
 
-    // Add current message
-    messages.push({ role: 'user', content: message });
+      // Add current message
+      messages.push({ role: 'user', content: message });
 
-    // Get access token
-    const token = getAccessToken();
-    const authHeader = token ? { 'Authorization': `Bearer ${token}` } : {};
-
-    const response = await fetch(`${baseUrl}/agent/chat/completions`, {
-      method: 'POST',
-      headers: {
+      // Get access token
+      const token = getAccessToken();
+      const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        ...authHeader,
-      },
-      body: JSON.stringify({
-        model: 'volcengine/deepseek-v3',
-        messages,
-        stream: true
-      })
-    });
+      };
 
-    // Handle authentication error, but do not retry streaming request
-    if (response.status === 401 && token) {
-      try {
-        await refreshTokenRequest();
-        // Prompt user to refresh page or retry conversation
-        onChunk("\n\n[Authentication refreshed. Please try sending your message again.]");
-        return {
-          id: Date.now().toString(),
-          choices: [
-            {
-              message: {
-                content: "[Authentication refreshed. Please try sending your message again.]",
-              },
-            },
-          ],
-        };
-      } catch (error) {
-        // Clear user authentication data
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        localStorage.removeItem('user_info');
-
-        onChunk("\n\n[Authentication failed. Please log in again.]");
-        return {
-          id: Date.now().toString(),
-          choices: [
-            {
-              message: {
-                content: "[Authentication failed. Please log in again.]",
-              },
-            },
-          ],
-        };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
       }
-    }
 
-    // Handle the case where the status code is 200 but the returned content indicates invalid user data
-    if (response.status === 200) {
-      // Check if the response contains a hint indicating invalid user data
-      const clonedResponse = response.clone();
-      try {
-        const text = await clonedResponse.text();
-        if (text.includes("invalid user") || text.includes("unauthorized") || text.includes("not authorized")) {
-          // Clear user authentication data
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
-          localStorage.removeItem('user_info');
+      // Store stage messages
+      let stageMessages: string[] = [];
 
-          onChunk("\n\n[Your session is invalid. Please log in again.]");
-          return {
+      // Create SSE connection
+      const source = new SSE(`${baseUrl}/agent/chat/completions`, {
+        headers,
+        method: 'POST',
+        payload: JSON.stringify({
+          messages,
+          stream: true
+        })
+      });
+
+      // Handle connection opened
+      source.addEventListener('open', function (e) {
+        console.log('SSE connection opened:', e);
+      });
+
+      // Handle error
+      source.addEventListener('error', function (e) {
+        const event = e as SSEvent;
+        const errorData = event.data || '';
+        let errorMessage = 'Connection failed';
+        let errorStatus = 0;
+
+        // Check if it is a 401 unauthorized error
+        if (errorData.includes('401') || errorData.includes('unauthorized') || errorData.includes('Unauthorized')) {
+          errorMessage = 'Session expired. Please login again.';
+          errorStatus = 401;
+
+          // Try to refresh token
+          refreshTokenRequest().catch(() => {
+            // Refresh failed, clear token
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            localStorage.removeItem('user_info');
+
+            // Trigger global API error event, not redirect directly
+            triggerApiError(errorMessage, 401, '/agent/chat/completions');
+          });
+        } else {
+          errorMessage = `Error: ${errorData}`;
+        }
+
+        console.error('SSE connection error:', errorMessage);
+
+        onChunk(JSON.stringify({
+          type: 'error',
+          error: {
+            message: errorMessage,
+            type: 'connection_error',
+            status: errorStatus
+          }
+        }));
+
+        source.close();
+        reject(new Error(errorMessage));
+      });
+
+      // Handle stage event (stage notification)
+      source.addEventListener('stage', function (e) {
+        const event = e as SSEvent;
+        const data = event.data || '';
+
+        try {
+          const jsonData = JSON.parse(data);
+          const stageContent = jsonData.stage;
+          const stageStatus = jsonData.status;
+          const messageContent = jsonData.choices?.[0]?.delta?.content || '';
+
+          // Send stage update
+          onChunk(JSON.stringify({
+            type: 'stage',
+            status: stageStatus,
+            content: stageContent,
+            message: messageContent
+          }));
+        } catch (error) {
+          console.warn('Failed to parse stage event:', error, data);
+          // Try to use data directly
+          const stageContent = typeof data === 'string' ? data : 'Unknown stage';
+
+          if (!stageMessages.some(msg => msg.includes(stageContent))) {
+            stageMessages.push(stageContent);
+          }
+
+          const formattedStages = stageMessages.join('|LINE_BREAK|');
+          onChunk(JSON.stringify({
+            type: 'stage',
+            content: formattedStages
+          }));
+        }
+      });
+
+      // Handle content event (content update)
+      source.addEventListener('content', function (e) {
+        const event = e as SSEvent;
+        const data = event.data || '';
+
+        try {
+          const jsonData = JSON.parse(data);
+          const content = jsonData.choices?.[0]?.delta?.content || '';
+
+          if (content) {
+            onChunk(JSON.stringify({
+              type: 'content',
+              content: content
+            }));
+          }
+        } catch (error) {
+          console.warn('Failed to parse content event:', error, data);
+          // Try to use data directly
+          onChunk(JSON.stringify({
+            type: 'content',
+            content: typeof data === 'string' ? data : ''
+          }));
+        }
+      });
+
+      // Handle message event (default event, handle old format or message without specified event type)
+      source.addEventListener('message', function (e) {
+        const event = e as SSEvent;
+        const data = event.data || '';
+
+        // If it is a [DONE] message, handle completion
+        if (data === '[DONE]') {
+          onChunk(JSON.stringify({ type: 'done' }));
+          source.close();
+
+          resolve({
             id: Date.now().toString(),
             choices: [
               {
                 message: {
-                  content: "[Your session is invalid. Please log in again.]",
+                  content: "Stream complete",
                 },
               },
             ],
-          };
+          });
+          return;
         }
-      } catch (e) {
-        // Error handling, continue with original process
-        console.warn("Error checking response content", e);
-      }
-    }
 
-    if (!response.ok) {
-      throw new Error(`API request failed with status ${response.status}`);
-    }
+        try {
+          const jsonData = JSON.parse(data);
 
-    const reader = response.body?.getReader();
-    const decoder = new TextDecoder();
-    let fullContent = '';
-
-    if (reader) {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n').filter(line => line.trim() !== '');
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            if (data === '[DONE]') continue;
-
-            try {
-              const parsedData = JSON.parse(data);
-              const content = parsedData.choices[0]?.delta?.content || '';
-              if (content) {
-                onChunk(content);
-                fullContent += content;
-              }
-            } catch (e) {
-              console.error('Error parsing SSE data:', e);
+          // Check if there is a clear type field
+          if (jsonData.type) {
+            if (jsonData.type === 'error') {
+              // Error message
+              onChunk(data);
+              source.close();
+              reject(new Error(jsonData.error?.message || 'Unknown error'));
+              return;
             }
-          }
-        }
-      }
-    }
 
-    return {
-      id: Date.now().toString(),
-      choices: [
-        {
-          message: {
-            content: fullContent,
-          },
-        },
-      ],
-    };
-  } catch (error) {
-    console.error('Error in API request:', error);
-    // Fallback to mock response when error occurs
-    return mockStreamResponse(message, onChunk);
-  }
+            // Other type messages directly pass
+            onChunk(data);
+            return;
+          }
+
+          // Check if there is a stage field
+          if (jsonData.stage) {
+            // Already handled through 'stage' event, skip duplicate processing
+            return;
+          }
+
+          // Check if there is content update
+          if (jsonData.choices && jsonData.choices[0]?.delta?.content) {
+            const content = jsonData.choices[0].delta.content;
+            onChunk(JSON.stringify({
+              type: 'content',
+              content: content
+            }));
+          } else {
+            // Unrecognized format, pass original data directly
+            onChunk(data);
+          }
+        } catch (error) {
+          console.warn('Failed to parse message event:', error, data);
+          // Non-JSON message, pass original data directly
+          onChunk(data);
+        }
+      });
+
+      // Handle completion event
+      source.addEventListener('done', function () {
+        source.close();
+        resolve({
+          id: Date.now().toString(),
+          choices: [
+            {
+              message: {
+                content: "Stream complete",
+              },
+            },
+          ],
+        });
+      });
+
+      // Start SSE connection
+      source.stream();
+
+    } catch (error) {
+      console.error("Error initializing streaming chat:", error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
+      onChunk(JSON.stringify({
+        type: 'error',
+        error: {
+          message: errorMessage,
+          type: 'client_error'
+        }
+      }));
+
+      reject(error);
+    }
+  });
 }
 
 // Keep original function as fallback
@@ -384,17 +493,9 @@ export function loadChats(): Chat[] {
   try {
     const storedChats = localStorage.getItem(STORAGE_KEY);
     if (storedChats) {
-      // Parse the stored data and convert date strings back to Date objects
+      // Parse the stored data
       const chats: Chat[] = JSON.parse(storedChats);
-      return chats.map(chat => ({
-        ...chat,
-        createdAt: new Date(chat.createdAt),
-        updatedAt: new Date(chat.updatedAt),
-        messages: chat.messages.map(msg => ({
-          ...msg,
-          timestamp: new Date(msg.timestamp)
-        }))
-      }));
+      return chats;
     }
   } catch (error) {
     console.error('Error loading chats from localStorage:', error);

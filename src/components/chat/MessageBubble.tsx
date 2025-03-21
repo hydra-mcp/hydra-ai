@@ -74,7 +74,7 @@ export const MessageBubble = ({ message, isStreaming }: MessageBubbleProps) => {
                         {isStreaming && !isUser ? (
                             "Thinking..."
                         ) : (
-                            message.timestamp.toLocaleTimeString([], {
+                            new Date(message.createdAt).toLocaleTimeString([], {
                                 hour: "2-digit",
                                 minute: "2-digit",
                             })
