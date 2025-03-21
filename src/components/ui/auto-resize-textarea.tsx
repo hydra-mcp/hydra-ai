@@ -1,6 +1,6 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import TextareaAutosize, { TextareaAutosizeProps } from "react-textarea-autosize";
+import TextareaAutosize from "react-textarea-autosize";
 
 export interface AutoResizeTextareaProps
     extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
@@ -13,6 +13,7 @@ const AutoResizeTextarea = React.forwardRef<
     AutoResizeTextareaProps
 >(({ className, minRows = 1, maxRows = 8, ...props }, ref) => {
     return (
+        // @ts-ignore: react-textarea-autosize has type issues with className
         <TextareaAutosize
             ref={ref}
             minRows={minRows}

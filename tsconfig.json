@@ -14,7 +14,9 @@
     "types": [
       "node"
     ],
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
   },
   "include": [
     "src/**/*.ts",

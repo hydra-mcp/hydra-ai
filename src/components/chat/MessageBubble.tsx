@@ -1,6 +1,9 @@
 import { cn } from "@/lib/utils";
-import { Bot, User } from "lucide-react";
+import { Bot, Loader2, User } from "lucide-react";
 import { Message } from "@/types/chat";
+import ReactMarkdown from 'react-markdown';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 interface MessageBubbleProps {
     message: Message;
@@ -30,20 +33,52 @@ export const MessageBubble = ({ message, isStreaming }: MessageBubbleProps) => {
                         : "bg-muted text-muted-foreground"
                 )}
             >
-                <div className="prose prose-sm dark:prose-invert break-words">
-                    {message.content}
+                <div className="prose prose-sm dark:prose-invert break-words max-w-none">
+                    {isUser ? (
+                        message.content
+                    ) : (
+                        <ReactMarkdown
+                            components={{
+                                code({ className, children, ...props }) {
+                                    const match = /language-(\w+)/.exec(className || '');
+                                    return match ? (
+                                        <SyntaxHighlighter
+                                            style={vscDarkPlus}
+                                            language={match[1]}
+                                            PreTag="div"
+                                            {...props}
+                                        >
+                                            {String(children).replace(/\n$/, '')}
+                                        </SyntaxHighlighter>
+                                    ) : (
+                                        <code className={className} {...props}>
+                                            {children}
+                                        </code>
+                                    );
+                                }
+                            }}
+                        >
+                            {message.content}
+                        </ReactMarkdown>
+                    )}
                 </div>
                 <div className="flex items-center gap-1 text-[10px] sm:text-xs opacity-70">
                     {isUser ? (
                         <User className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                    ) : isStreaming ? (
+                        <Loader2 className="h-2.5 w-2.5 sm:h-3 sm:w-3 animate-spin" />
                     ) : (
                         <Bot className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
                     )}
                     <span>
-                        {message.timestamp.toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                        })}
+                        {isStreaming && !isUser ? (
+                            "Thinking..."
+                        ) : (
+                            message.timestamp.toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                            })
+                        )}
                     </span>
                 </div>
             </div>
