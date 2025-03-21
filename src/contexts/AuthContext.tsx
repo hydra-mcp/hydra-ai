@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { apiRequest, refreshTokenRequest } from '@/lib/api';
 
-// 定义API响应类型
+// Define API response type
 interface AuthResponse {
     access_token: string;
     refresh_token: string;
@@ -11,7 +11,7 @@ interface AuthResponse {
 interface UserInfo {
     id: string;
     username: string;
-    // 添加其他用户信息字段
+    // Add other user information fields
     [key: string]: any;
 }
 
@@ -37,7 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [loading, setLoading] = useState<boolean>(true);
     const [lastUserFetch, setLastUserFetch] = useState<number>(0);
 
-    // 获取当前用户信息 with caching
+    // Get current user information with caching
     const getCurrentUser = async () => {
         const token = localStorage.getItem('access_token');
         if (!token) {
@@ -59,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 method: 'GET',
             });
 
-            // 验证用户信息的有效性
+            // Verify the validity of user information
             if (!userInfo || !userInfo.id || !userInfo.username) {
                 console.error('Invalid user data received from /auth/me');
                 throw new Error('Invalid user data received');
@@ -71,10 +71,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return userInfo;
         } catch (error) {
             console.error('Failed to get current user:', error);
-            // 如果获取用户信息失败，清除认证状态
+            // If getting user information fails, clear authentication status
             logout();
 
-            // 获取详细错误信息
+            // Get detailed error information
             const errorMessage = error instanceof Error
                 ? error.message
                 : 'Authentication failed, please login again';
@@ -85,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    // 检查用户是否已登录 - 仅在初始化时执行一次
+    // Check if user is logged in - only executed once on initialization
     useEffect(() => {
         const checkAuth = async () => {
             // First try to use cached user info from localStorage
@@ -96,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 try {
                     const userInfo = JSON.parse(userInfoStr);
 
-                    // 验证本地存储的用户信息是否包含必要字段
+                    // Verify if the user information in localStorage contains the necessary fields
                     if (!userInfo || !userInfo.id || !userInfo.username) {
                         console.warn('Invalid user info in local storage');
                         throw new Error('Invalid user info');
@@ -109,13 +109,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     // In the background, verify token validity without blocking UI
                     getCurrentUser().catch(err => {
                         console.warn('Background token validation failed:', err);
-                        // 验证失败时自动注销
+                        // Logout when validation fails
                         logout();
                     });
                     return;
                 } catch (e) {
                     console.error('Error parsing cached user info:', e);
-                    // 清除无效的用户信息
+                    // Clear invalid user information
                     logout();
                 }
             }
@@ -142,7 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 body: JSON.stringify({ username, password }),
             });
 
-            // 存储令牌到本地存储
+            // Store tokens to localStorage
             localStorage.setItem('access_token', data.access_token);
             localStorage.setItem('refresh_token', data.refresh_token);
             localStorage.setItem('user_info', JSON.stringify(data.user_info));
@@ -186,7 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const logout = () => {
-        // 清除所有本地存储的令牌和用户信息
+        // Clear all tokens and user information in localStorage
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('user_info');
@@ -195,7 +195,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
         setLastUserFetch(0);
 
-        // 不在此处重定向，让应用程序根据路由保护处理重定向
+        // Do not redirect here, let the application handle redirection based on routes
     };
 
     const getToken = () => {

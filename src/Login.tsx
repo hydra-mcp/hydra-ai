@@ -14,9 +14,9 @@ interface StarProps {
     opacity: number;
     delay: number;
     duration: number;
-    twinkleType: 'default' | 'random'; // 闪烁类型
-    color?: string; // 星星颜色
-    type?: 'normal' | 'bright' | 'flare'; // 星星类型：普通、亮星或耀斑星
+    twinkleType: 'default' | 'random';
+    color?: string;
+    type?: 'normal' | 'bright' | 'flare';
 }
 
 interface MeteorProps {
@@ -80,9 +80,9 @@ export function Login() {
         }
     };
 
-    // 生成多层背景元素 - 使用useMemo确保不会在每次渲染时重新生成
+    //  - useMemo
     const backgroundLayers = useMemo(() => {
-        // 近景层元素 - 较小，移动较快
+        //  - ，
         const foregroundElements = Array.from({ length: 5 }).map((_, i) => ({
             id: `fg-${i}`,
             size: Math.random() * 180 + 120,
@@ -101,7 +101,7 @@ export function Login() {
             layer: 'foreground',
         }));
 
-        // 中景层元素 - 中等大小，中等移动速度
+        //  - ，
         const middlegroundElements = Array.from({ length: 5 }).map((_, i) => ({
             id: `mg-${i}`,
             size: Math.random() * 250 + 180,
@@ -120,7 +120,7 @@ export function Login() {
             layer: 'middleground',
         }));
 
-        // 远景层元素 - 较大，移动缓慢
+        //  - ，
         const backgroundElements = Array.from({ length: 3 }).map((_, i) => ({
             id: `bg-${i}`,
             size: Math.random() * 380 + 280,
@@ -142,67 +142,67 @@ export function Login() {
         return [...foregroundElements, ...middlegroundElements, ...backgroundElements];
     }, []);
 
-    // 星星颜色选项
+    // 
     const starColors = useMemo(() => [
-        'rgba(255, 255, 255, 0.9)', // 白色
-        'rgba(220, 235, 255, 0.9)', // 淡蓝色
-        'rgba(255, 230, 220, 0.9)', // 淡红色
-        'rgba(255, 255, 220, 0.9)', // 淡黄色
-        'rgba(220, 255, 240, 0.9)', // 淡绿色
+        'rgba(255, 255, 255, 0.9)', // 
+        'rgba(220, 235, 255, 0.9)', // 
+        'rgba(255, 230, 220, 0.9)', // 
+        'rgba(255, 255, 220, 0.9)', // 
+        'rgba(220, 255, 240, 0.9)', // 
     ], []);
 
-    // 生成随机大小和闪烁效果的星星
+    // 
     const stars = useMemo(() => {
-        // 主星空 - 密集的小星星
+        //  - 
         const mainStars = Array.from({ length: 120 }).map((_, i): StarProps => ({
-            size: Math.random() * 2.5 + 0.8, // 0.8-3.3px 大小的星星
+            size: Math.random() * 2.5 + 0.8, // 0.8-3.3px 
             top: `${Math.random() * 100}%`,
             left: `${Math.random() * 100}%`,
-            opacity: 0.3 + Math.random() * 0.7, // 随机透明度
-            delay: Math.random() * 5, // 随机延迟
-            duration: 2 + Math.random() * 4, // 随机动画持续时间
-            twinkleType: Math.random() > 0.7 ? 'random' : 'default', // 30%的星星使用随机闪烁
+            opacity: 0.3 + Math.random() * 0.7, // 
+            delay: Math.random() * 5, // 
+            duration: 2 + Math.random() * 4, // 
+            twinkleType: Math.random() > 0.7 ? 'random' : 'default', // 30%
             color: starColors[Math.floor(Math.random() * starColors.length)],
             type: 'normal'
         }));
 
-        // 亮星 - 较大且更明亮的星星，数量少
+        //  - ，
         const brightStars = Array.from({ length: 15 }).map((_, i): StarProps => ({
-            size: Math.random() * 3 + 2.5, // 2.5-5.5px 大小的亮星
+            size: Math.random() * 3 + 2.5, // 2.5-5.5px 
             top: `${Math.random() * 100}%`,
             left: `${Math.random() * 100}%`,
-            opacity: 0.7 + Math.random() * 0.3, // 更高的透明度使其更亮
-            delay: Math.random() * 3, // 随机延迟
-            duration: 3 + Math.random() * 5, // 随机动画持续时间
-            twinkleType: 'random', // 亮星都使用随机闪烁
+            opacity: 0.7 + Math.random() * 0.3, // 
+            delay: Math.random() * 3, // 
+            duration: 3 + Math.random() * 5, // 
+            twinkleType: 'random', // 
             color: starColors[Math.floor(Math.random() * starColors.length)],
             type: 'bright'
         }));
 
-        // 特殊耀斑星 - 有闪烁光晕效果的大星星
+        //  - 
         const flareStars = Array.from({ length: 5 }).map((_, i): StarProps => ({
-            size: Math.random() * 2 + 3, // 3-5px 大小的耀斑星
+            size: Math.random() * 2 + 3, // 3-5px 
             top: `${Math.random() * 100}%`,
             left: `${Math.random() * 100}%`,
-            opacity: 0.8 + Math.random() * 0.2, // 高透明度
-            delay: Math.random() * 4, // 随机延迟
-            duration: 6 + Math.random() * 4, // 更长的动画时间
+            opacity: 0.8 + Math.random() * 0.2, // 
+            delay: Math.random() * 4, // 
+            duration: 6 + Math.random() * 4, // 
             twinkleType: 'random',
-            color: i % 2 === 0 ? 'rgba(220, 235, 255, 0.95)' : 'rgba(255, 230, 220, 0.95)', // 蓝白或橙白色
+            color: i % 2 === 0 ? 'rgba(220, 235, 255, 0.95)' : 'rgba(255, 230, 220, 0.95)', // 
             type: 'flare'
         }));
 
         return [...mainStars, ...brightStars, ...flareStars];
     }, [starColors]);
 
-    // 流星颜色
+    // 
     const meteorColors = useMemo(() => [
-        'rgba(255, 255, 255, 0.9)', // 白色
-        'rgba(200, 220, 255, 0.9)', // 蓝白色
-        'rgba(255, 220, 200, 0.9)', // 橙白色
+        'rgba(255, 255, 255, 0.9)', // 
+        'rgba(200, 220, 255, 0.9)', // 
+        'rgba(255, 220, 200, 0.9)', // 
     ], []);
 
-    // 创建一个流星组件
+    // 
     const Meteor = useCallback(({ top, left, delay, duration, size, angle, color = 'rgba(255, 255, 255, 0.9)' }: MeteorProps) => (
         <div
             className="absolute overflow-hidden"
@@ -226,7 +226,7 @@ export function Login() {
                     animationDuration: `${duration}s`,
                 }}
             >
-                {/* 流星头部光晕 */}
+                {/*  */}
                 <div
                     className="absolute h-full rounded-full animate-meteor-glow"
                     style={{
@@ -241,21 +241,21 @@ export function Login() {
         </div>
     ), []);
 
-    // 生成流星
+    // 
     const meteors = useMemo(() => {
         return Array.from({ length: 10 }).map((_, i) => ({
             id: `meteor-${i}`,
-            top: `${Math.random() * 40}%`, // 主要在上半部分出现
-            left: `${Math.random() * 100 - 20}%`, // 可能从画面外开始
-            delay: Math.random() * 20 + i * 3, // 分散延迟，使流星出现更随机
-            duration: 3 + Math.random() * 4, // 持续时间变化
-            size: 1 + Math.random() * 2, // 流星大小
-            angle: -35 - Math.random() * 20, // 流星角度变化，主要向右下方向
+            top: `${Math.random() * 40}%`, // 
+            left: `${Math.random() * 100 - 20}%`, // 
+            delay: Math.random() * 20 + i * 3, // ，
+            duration: 3 + Math.random() * 4, // 
+            size: 1 + Math.random() * 2, // 
+            angle: -35 - Math.random() * 20, // ，
             color: meteorColors[Math.floor(Math.random() * meteorColors.length)],
         }));
     }, [meteorColors]);
 
-    // 银河带效果
+    // 
     const galaxies = useMemo(() => {
         return [
             {
@@ -277,27 +277,27 @@ export function Login() {
         ];
     }, []);
 
-    // 生成分离的动画字母
+    // 
     const titleLetters = useMemo(() => {
         const title = "HYDRA-AI";
         return title.split('').map((letter, index) => ({
             letter,
-            delay: index * 0.1, // 每个字母都有一个微小的延迟
+            delay: index * 0.1, // 
             animationDelay: index * 0.15 + "s",
         }));
     }, []);
 
     return (
         <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-b from-blue-900 via-indigo-900 to-black">
-            {/* 柔和的全局辉光效果 */}
+            {/*  */}
             <div className="absolute inset-0 bg-blue-500/5 backdrop-blur-[180px]"></div>
 
-            {/* 渐变光晕 */}
+            {/*  */}
             <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full bg-blue-500/5 blur-[150px] animate-pulse-slow"></div>
             <div className="absolute bottom-1/4 right-1/3 w-[500px] h-[500px] rounded-full bg-indigo-500/5 blur-[120px] animate-pulse-slow" style={{ animationDelay: '2s' }}></div>
             <div className="absolute top-2/3 left-1/4 w-[400px] h-[400px] rounded-full bg-violet-500/5 blur-[100px] animate-pulse-slow" style={{ animationDelay: '4s' }}></div>
 
-            {/* 银河带效果 */}
+            {/*  */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 {galaxies.map((galaxy, i) => (
                     <div
@@ -316,7 +316,7 @@ export function Login() {
                         }}
                     >
                         <div className="absolute inset-0 animate-galaxy-rotate">
-                            {/* 银河中的星团效果 */}
+                            {/*  */}
                             {Array.from({ length: 30 }).map((_, j) => (
                                 <div
                                     key={`galaxy-star-${i}-${j}`}
@@ -336,7 +336,7 @@ export function Login() {
                 ))}
             </div>
 
-            {/* 高级星空效果 - 随机大小和闪烁效果 */}
+            {/*  -  */}
             <div className="absolute inset-0 overflow-hidden">
                 {stars.map((star, i) => (
                     <div
@@ -365,7 +365,7 @@ export function Login() {
                 ))}
             </div>
 
-            {/* 流星雨效果 */}
+            {/*  */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 {meteors.map((meteor) => (
                     <Meteor
@@ -381,7 +381,7 @@ export function Login() {
                 ))}
             </div>
 
-            {/* 多层次背景动画元素 */}
+            {/*  */}
             <div className="absolute inset-0 overflow-hidden">
                 {backgroundLayers.map((element) => (
                     <motion.div
@@ -414,24 +414,24 @@ export function Login() {
                 ))}
             </div>
 
-            {/* 登录表单 */}
+            {/*  */}
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.7, ease: "easeOut" }}
                 className="relative w-full max-w-md mx-4 z-10"
             >
-                {/* 表单背后的额外辉光 */}
+                {/*  */}
                 <div className="absolute inset-0 bg-blue-400/10 rounded-2xl blur-xl -m-2"></div>
 
                 <div className="bg-black/30 backdrop-blur-xl rounded-2xl shadow-2xl p-8 border border-white/10 relative">
-                    {/* 表单内部的细微光晕效果 */}
+                    {/*  */}
                     <div className="absolute top-0 left-0 w-full h-full overflow-hidden rounded-2xl">
                         <div className="absolute -top-40 -left-40 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl"></div>
                         <div className="absolute -bottom-40 -right-40 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl"></div>
                     </div>
 
-                    {/* HYDRA-AI 标题 */}
+                    {/* HYDRA-AI  */}
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}

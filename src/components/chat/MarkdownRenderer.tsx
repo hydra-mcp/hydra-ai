@@ -20,7 +20,6 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
                 components={{
                     code({ className, children, ...props }) {
                         const match = /language-(\w+)/.exec(className || '');
-                        // 如果有语言类名匹配且内容包含换行，认为是代码块而非内联代码
                         const isCodeBlock = match && String(children).includes('\n');
 
                         return isCodeBlock ? (

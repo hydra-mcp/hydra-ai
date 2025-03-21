@@ -21,12 +21,12 @@ export function ChatMessage({
   const [displayedContent, setDisplayedContent] = useState('');
   const [typingComplete, setTypingComplete] = useState(!isAI || !isStreaming);
 
-  // 入场动画
+  // Entrance animation
   useEffect(() => {
     setIsVisible(true);
   }, []);
 
-  // 对AI消息实现打字机效果
+  // Implement typing effect for AI messages
   useEffect(() => {
     if (!isAI || !isStreaming || !message.content) {
       setDisplayedContent(message.content);
@@ -46,7 +46,7 @@ export function ChatMessage({
         clearInterval(typingInterval);
         setTypingComplete(true);
       }
-    }, 15); // 更快的打字速度
+    }, 15); // Faster typing speed
 
     return () => clearInterval(typingInterval);
   }, [isAI, isStreaming, message.content]);

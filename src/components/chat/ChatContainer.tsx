@@ -59,7 +59,6 @@ export const ChatContainer = memo(({
         );
     }
 
-    // 显示欢迎信息，如果聊天是空的
     if (currentChat.messages.length === 0) {
         return (
             <div className="flex h-full flex-col items-center justify-center px-4 py-8 text-center">

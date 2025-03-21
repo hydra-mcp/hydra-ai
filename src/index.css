@@ -106,7 +106,7 @@
     box-shadow: 0 10px 25px -5px rgba(var(--primary-rgb), 0.2);
   }
 
-  /* 高斯模糊背景特效 */
+  /* Gaussian blur background effect */
   .glassmorphism {
     background: rgba(255, 255, 255, 0.1);
     backdrop-filter: blur(10px);
@@ -148,7 +148,7 @@
   animation: slide-up 0.2s ease-out forwards;
 }
 
-/* 自定义动画 */
+/* Custom Animation */
 @keyframes blink {
 
   0%,

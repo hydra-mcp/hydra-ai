@@ -12,20 +12,20 @@ const MOCK_RESPONSES = [
 // Local storage keys
 const STORAGE_KEY = 'chatApp_chats';
 
-// API 基础URL
+// API base URL
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
-// 获取访问令牌
+// Get access token
 export function getAccessToken(): string | null {
   return localStorage.getItem('access_token');
 }
 
-// 检查是否已认证
+// Check if authenticated
 export function isAuthenticated(): boolean {
   return !!getAccessToken();
 }
 
-// 通用API请求函数
+// Common API request function
 export async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {}
@@ -34,12 +34,12 @@ export async function apiRequest<T>(
     const token = getAccessToken();
     const baseUrl = API_BASE_URL || '';
 
-    // 构建完整URL
+    // Build full URL
     const url = endpoint.startsWith('http')
       ? endpoint
       : `${baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
-    // 设置默认headers
+    // Set default headers
     const headers = {
       'Content-Type': 'application/json',
       ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
@@ -51,13 +51,13 @@ export async function apiRequest<T>(
       headers,
     });
 
-    // 处理401错误 - 令牌过期
+    // Handle 401 error - token expired
     if (response.status === 401) {
-      // 尝试刷新令牌
+      // Try to refresh token
       try {
         await refreshTokenRequest();
 
-        // 使用新令牌重试原请求
+        // Retry original request with new token
         const newToken = getAccessToken();
         if (!newToken) {
           throw new Error('Token refresh failed');
@@ -83,7 +83,7 @@ export async function apiRequest<T>(
 
         return await retryResponse.json();
       } catch (refreshError) {
-        // 刷新失败，清除令牌并抛出错误
+        // Refresh failed, clear token and throw error
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('user_info');
@@ -91,7 +91,7 @@ export async function apiRequest<T>(
       }
     }
 
-    // 处理其他错误
+    // Handle other errors
     if (!response.ok) {
       const errorBody = await response.json().catch(() => ({}));
       throw new Error(
@@ -101,20 +101,20 @@ export async function apiRequest<T>(
       );
     }
 
-    // 对于204和空响应，返回空对象
+    // For 204 and empty responses, return empty object
     if (response.status === 204 || response.headers.get('content-length') === '0') {
       return {} as T;
     }
 
-    // 尝试解析响应JSON
+    // Try to parse response JSON
     try {
       const data = await response.json();
 
-      // 特殊处理 /auth/me 接口，验证返回的用户信息是否有效
+      // Special handling for /auth/me interface, verify if the returned user information is valid
       if (endpoint === '/auth/me' || endpoint.endsWith('/auth/me')) {
-        // 检查必要的用户信息字段是否存在且有效
+        // Check if the necessary user information fields exist and are valid
         if (!data || !data.id || !data.username) {
-          // 清除认证信息
+          // Clear authentication information
           localStorage.removeItem('access_token');
           localStorage.removeItem('refresh_token');
           localStorage.removeItem('user_info');
@@ -133,7 +133,7 @@ export async function apiRequest<T>(
   }
 }
 
-// 刷新令牌请求
+// Refresh token request
 export async function refreshTokenRequest(): Promise<void> {
   const refreshToken = localStorage.getItem('refresh_token');
 
@@ -156,7 +156,7 @@ export async function refreshTokenRequest(): Promise<void> {
 
     const data = await response.json();
 
-    // 更新存储的令牌
+    // Update stored token
     localStorage.setItem('access_token', data.access_token);
     if (data.refresh_token) {
       localStorage.setItem('refresh_token', data.refresh_token);
@@ -216,7 +216,7 @@ export async function sendStreamMessage(
     // Add current message
     messages.push({ role: 'user', content: message });
 
-    // 获取访问令牌
+    // Get access token
     const token = getAccessToken();
     const authHeader = token ? { 'Authorization': `Bearer ${token}` } : {};
 
@@ -233,11 +233,11 @@ export async function sendStreamMessage(
       })
     });
 
-    // 处理认证错误，但不重试流式请求
+    // Handle authentication error, but do not retry streaming request
     if (response.status === 401 && token) {
       try {
         await refreshTokenRequest();
-        // 提示用户刷新页面或重试对话
+        // Prompt user to refresh page or retry conversation
         onChunk("\n\n[Authentication refreshed. Please try sending your message again.]");
         return {
           id: Date.now().toString(),
@@ -250,7 +250,7 @@ export async function sendStreamMessage(
           ],
         };
       } catch (error) {
-        // 清除用户认证数据
+        // Clear user authentication data
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('user_info');
@@ -269,14 +269,14 @@ export async function sendStreamMessage(
       }
     }
 
-    // 处理状态码为200但返回内容表明用户数据无效的情况
+    // Handle the case where the status code is 200 but the returned content indicates invalid user data
     if (response.status === 200) {
-      // 检查响应中是否包含表明用户数据无效的提示
+      // Check if the response contains a hint indicating invalid user data
       const clonedResponse = response.clone();
       try {
         const text = await clonedResponse.text();
         if (text.includes("invalid user") || text.includes("unauthorized") || text.includes("not authorized")) {
-          // 清除用户认证数据
+          // Clear user authentication data
           localStorage.removeItem('access_token');
           localStorage.removeItem('refresh_token');
           localStorage.removeItem('user_info');
@@ -294,7 +294,7 @@ export async function sendStreamMessage(
           };
         }
       } catch (e) {
-        // 错误处理，继续执行原流程
+        // Error handling, continue with original process
         console.warn("Error checking response content", e);
       }
     }
