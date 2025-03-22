@@ -1,7 +1,7 @@
 import { Chat } from "@/types/chat";
 import { MessageBubble } from "./MessageBubble";
 import { memo, useEffect, useState } from "react";
-import { Bot, MessageSquarePlus, ArrowRight, Info, CheckCircle, Loader2, BrainCircuit, Sparkles, Zap, Stars, Lightbulb } from "lucide-react";
+import { Bot, MessageSquarePlus, ArrowRight, Info, CheckCircle, Loader2, BrainCircuit, Sparkles, Zap, Stars, Lightbulb, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -115,6 +115,7 @@ export const ChatContainer = memo(({
                         </div>
                         {processingStage.map((stage, index) => {
                             const isCompleted = stage.status === 1;
+                            const isError = stage.status === 2;
                             const stageText = stage.message.trim();
                             if (!stageText) return null;
 
@@ -130,6 +131,8 @@ export const ChatContainer = memo(({
                                                 <div className="absolute inset-y-0 w-2/3 animate-light-sweep"></div>
                                             </div>
                                         </div>
+                                    ) : isError ? (
+                                        <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
                                     ) : isCompleted ? (
                                         <CheckCircle className="h-3.5 w-3.5 text-green-500 shrink-0" />
                                     ) : index === processingStage.length - 1 ? (
@@ -139,14 +142,16 @@ export const ChatContainer = memo(({
                                     )}
                                     <span className={cn(
                                         "transition-all duration-300",
-                                        isCompleted
-                                            ? 'text-green-600 font-medium'
-                                            : stage.content === ''
-                                                ? 'text-indigo-500 font-medium'
-                                                : 'text-muted-foreground'
+                                        isError
+                                            ? 'text-red-600 font-medium'
+                                            : isCompleted
+                                                ? 'text-green-600 font-medium'
+                                                : stage.content === ''
+                                                    ? 'text-indigo-500 font-medium'
+                                                    : 'text-muted-foreground'
                                     )}>
                                         {stageText}
-                                        {!isCompleted && index === processingStage.length - 1 ? '...' : ''}
+                                        {!isCompleted && !isError && index === processingStage.length - 1 ? '...' : ''}
                                     </span>
                                 </div>
                             );

@@ -124,8 +124,8 @@ export function ChatPage() {
             id: uuid(),
             title: 'New Chat',
             messages: [],
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
+            createdAt: new Date().toLocaleString(),
+            updatedAt: new Date().toLocaleString(),
         };
         setChats(prev => [newChat, ...prev]);
         setCurrentChatId(newChat.id);
@@ -153,7 +153,7 @@ export function ChatPage() {
                                 ...chat,
                                 ...updates,
                                 messages: newMessages,
-                                updatedAt: new Date().toISOString() // 
+                                updatedAt: new Date().toLocaleString() // 
                             };
                         }
 
@@ -309,7 +309,6 @@ export function ChatPage() {
                         switch (jsonData.type) {
                             case 'content':
                                 if (jsonData.content) {
-                                    console.log("content", jsonData.content);
                                     handleContentUpdate(jsonData.content);
                                     hasReceivedContent = true;
                                 }
