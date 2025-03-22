@@ -1,12 +1,12 @@
 import { Send, ChevronDown, Sparkles, Loader2, Info, CheckCircle } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { cn } from '@/lib/utils';
+import { cn, uuid } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AutoResizeTextarea } from '@/components/ui/auto-resize-textarea';
 import { useToast } from '@/hooks/use-toast';
 import { ChatList } from '@/components/chat/ChatList';
-import { Chat, Message } from '@/types/chat';
+import { Chat, Message, MessageSender } from '@/types/chat';
 import { sendStreamMessage, saveChats, loadChats, deleteChat, clearAllChats } from '@/lib/api';
 import { ChatContainer, ProcessingStage } from '@/components/chat/ChatContainer';
 import { useOutletContext } from 'react-router-dom';
@@ -29,10 +29,13 @@ export function ChatPage() {
     const [isLoadingChats, setIsLoadingChats] = useState(true);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollAreaRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLTextAreaElement>(null);
     const { toast } = useToast();
     const [isManualScrolling, setIsManualScrolling] = useState(false);
     const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const [processingStage, setProcessingStage] = useState<Array<ProcessingStage>>([]);
+    // current AI message id
+    const [streamMessageId, setStreamMessageId] = useState<string>(uuid());
 
     const currentChat = chats.find(chat => chat.id === currentChatId);
 
@@ -102,8 +105,23 @@ export function ChatPage() {
     };
 
     const createNewChat = () => {
+        // check if there is an empty chat window
+        const emptyChat = chats.find(chat => chat.messages.length === 0);
+
+        if (emptyChat) {
+            // there is an empty chat window, switch to it
+            setCurrentChatId(emptyChat.id);
+
+            // focus on input
+            setTimeout(() => {
+                inputRef.current?.focus();
+            }, 100);
+            return;
+        }
+
+        // there is no empty chat window, create a new chat
         const newChat: Chat = {
-            id: Date.now().toString(),
+            id: uuid(),
             title: 'New Chat',
             messages: [],
             createdAt: new Date().toISOString(),
@@ -111,29 +129,26 @@ export function ChatPage() {
         };
         setChats(prev => [newChat, ...prev]);
         setCurrentChatId(newChat.id);
+
+        // focus on input
+        setTimeout(() => {
+            inputRef.current?.focus();
+        }, 100);
     };
 
     const updateChat = (chatId: string, updates: Partial<Chat>) => {
-        if (isStreaming && updates.messages && currentChatId === chatId) {
-            // ，
+        if (updates.messages && currentChatId === chatId) {
             setChats(prev => {
-                // 
                 const newChats = prev.map(chat => {
                     if (chat.id === chatId) {
-                        // 
                         const updatedMessages = updates.messages;
 
-                        // （）
                         if (updatedMessages && chat.messages.length > 0 &&
                             updatedMessages.length === chat.messages.length) {
-                            // 
                             const lastMessageIndex = updatedMessages.length - 1;
-                            // 
                             const newMessages = [...chat.messages];
-                            // 
                             newMessages[lastMessageIndex] = updatedMessages[lastMessageIndex];
 
-                            // 
                             return {
                                 ...chat,
                                 ...updates,
@@ -142,17 +157,25 @@ export function ChatPage() {
                             };
                         }
 
-                        // ，
-                        return { ...chat, ...updates };
+                        // update messages by id
+                        const messages = [...chat.messages]
+                        updates.messages.forEach(message => {
+                            const index = messages.findIndex(m => m.id === message.id);
+                            if (index !== -1) {
+                                messages[index] = message;
+                            }
+                            else {
+                                messages.push(message);
+                            }
+                        });
+                        return { ...chat, ...updates, messages: messages };
                     }
-                    // 
                     return chat;
                 });
 
                 return newChats;
             });
         } else {
-            // ，
             setChats(prev =>
                 prev.map(chat =>
                     chat.id === chatId ? { ...chat, ...updates } : chat
@@ -202,33 +225,36 @@ export function ChatPage() {
         setTimeout(() => setPlaySentSound(false), 300);
 
         const userMessage: Message = {
-            id: Date.now().toString(),
+            id: uuid(),
             content: input,
             sender: 'user',
             createdAt: new Date().toLocaleString(),
         };
 
         // Update chat with user message
-        const updatedMessages = [...(currentChat?.messages || []), userMessage];
-        updateChat(currentChatId, {
-            messages: updatedMessages,
-            updatedAt: new Date().toLocaleString(),
-            title: updatedMessages.length === 1 ? input.slice(0, 30) : currentChat?.title,
-        });
+
+        // updateChat(currentChatId, {
+        //     messages: updatedMessages,
+        //     updatedAt: new Date().toLocaleString(),
+        //     title: updatedMessages.length === 1 ? input.slice(0, 30) : currentChat?.title,
+        // });
 
         // Create AI message placeholder - ，
-        const aiMessageId = (Date.now() + 1).toString();
+        const aiMessageId = uuid();
+        setStreamMessageId(aiMessageId);
         const aiMessage: Message = {
-            id: aiMessageId,
+            id: streamMessageId,
             content: '', // ，"..."
             sender: 'ai',
             createdAt: new Date().toLocaleString(),
         };
 
         // AI
+        const updatedMessages = [...(currentChat?.messages || []), userMessage];
         updateChat(currentChatId, {
             messages: [...updatedMessages, aiMessage],
             updatedAt: new Date().toLocaleString(),
+            title: updatedMessages.length === 1 ? input.slice(0, 30) : currentChat?.title,
         });
 
         setInput('');
@@ -300,6 +326,7 @@ export function ChatPage() {
                                 updateChat(currentChatId, {
                                     messages: [...updatedMessages, {
                                         ...aiMessage,
+                                        id: streamMessageId,
                                         content: `Error: ${jsonData.error?.message || 'An unknown error occurred'}`,
                                     }],
                                     updatedAt: new Date().toLocaleString(),
@@ -308,6 +335,7 @@ export function ChatPage() {
 
                             case 'done':
                                 console.log("Stream completed");
+                                setStreamMessageId(uuid());
                                 break;
 
                             default:
@@ -331,12 +359,17 @@ export function ChatPage() {
             );
 
             if (!hasReceivedContent) {
-                handleContentUpdate("，。");
+                handleContentUpdate("no response from server.");
             }
 
             // Streaming complete
             setIsStreaming(false);
             setProcessingStage([]);
+
+            // Focus back to input after streaming is complete
+            setTimeout(() => {
+                inputRef.current?.focus();
+            }, 100);
 
             // Trigger received sound when AI message is complete
             setPlayReceivedSound(true);
@@ -346,6 +379,12 @@ export function ChatPage() {
             console.error("Error from API:", error);
             setIsStreaming(false);
             setProcessingStage([]);
+
+            // Focus back to input after error handling
+            setTimeout(() => {
+                inputRef.current?.focus();
+            }, 100);
+
             toast({
                 title: 'Error',
                 description: 'Failed to get AI response.',
@@ -356,6 +395,7 @@ export function ChatPage() {
             updateChat(currentChatId, {
                 messages: [...updatedMessages, {
                     ...aiMessage,
+                    id: streamMessageId,
                     content: 'Sorry, I encountered an issue and couldn\'t respond to your request. Please try again later.',
                 }],
                 updatedAt: new Date().toLocaleString(),
@@ -364,7 +404,7 @@ export function ChatPage() {
     };
 
     // 
-    const handleContentUpdate = (content: string) => {
+    const handleContentUpdate = (content: string, role: MessageSender = "ai") => {
         if (!content || !currentChatId) return;
 
         setStreamingContent(prev => {
@@ -372,26 +412,28 @@ export function ChatPage() {
 
             //  - AI
             if (currentChat) {
+                setStreamingContent
                 const messages = currentChat.messages || [];
 
-                // 如果有消息且最后一条是AI消息，则更新该消息
+                // if there are messages and the last message is an AI message, update it
                 if (messages.length > 0) {
                     const lastMessage = messages[messages.length - 1];
 
-                    // AI，
+                    // AI message,
                     if (lastMessage.sender === 'ai') {
                         updateChat(currentChatId, {
                             messages: [...messages.slice(0, -1), {
                                 ...lastMessage,
                                 content: newContent,
+                                id: streamMessageId,
                             }],
                             updatedAt: new Date().toLocaleString(),
                         });
                     } else {
-                        // 如果最后一条不是AI消息，添加新的AI消息
+                        // if the last message is not an AI message, add a new AI message
                         updateChat(currentChatId, {
                             messages: [...messages, {
-                                id: Date.now().toString(),
+                                id: streamMessageId,
                                 content: newContent,
                                 sender: 'ai',
                                 createdAt: new Date().toLocaleString(),
@@ -400,12 +442,12 @@ export function ChatPage() {
                         });
                     }
                 } else {
-                    // 处理消息列表为空的情况
+                    // handle the case when the message list is empty
                     updateChat(currentChatId, {
                         messages: [{
-                            id: Date.now().toString(),
+                            id: role === "ai" ? streamMessageId : uuid(),
                             content: newContent,
-                            sender: 'ai',
+                            sender: role,
                             createdAt: new Date().toLocaleString(),
                         }],
                         updatedAt: new Date().toLocaleString(),
@@ -554,6 +596,7 @@ export function ChatPage() {
                 <div className="container mx-auto flex gap-2 py-2 sm:py-4">
                     <div className="flex gap-2 w-full px-4">
                         <AutoResizeTextarea
+                            ref={inputRef}
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={(e) => {

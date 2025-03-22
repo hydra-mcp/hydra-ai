@@ -231,7 +231,7 @@ export async function sendStreamMessage(
       }));
 
       // Add current message
-      messages.push({ role: 'user', content: message });
+      // messages.push({ role: 'user', content: message });
 
       // Get access token
       const token = getAccessToken();
@@ -478,6 +478,10 @@ export async function sendStreamMessage(
       // Handle completion event
       source.addEventListener('done', function () {
         source.close();
+        onChunk(JSON.stringify({
+          type: 'done',
+        }));
+
         resolve({
           id: Date.now().toString(),
           choices: [

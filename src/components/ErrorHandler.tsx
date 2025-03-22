@@ -15,14 +15,14 @@ interface ApiErrorEvent extends CustomEvent {
 export function ErrorHandler() {
     const { toast } = useToast();
     const navigate = useNavigate();
-    // 使用try-catch包裹useAuth，防止在AuthProvider外部使用时报错
+    // Use try-catch to useAuth, prevent error when used outside AuthProvider
     let authContext;
     try {
         authContext = useAuth();
     } catch (error) {
         console.warn('ErrorHandler: AuthContext not available', error);
     }
-    // 从authContext中获取logout方法，如果不可用则提供一个空函数
+    // from authContext get logout method, if not available, provide an empty function
     const logout = authContext?.logout || (() => {
         console.warn('Logout function not available, clearing local storage directly');
         localStorage.removeItem('access_token');

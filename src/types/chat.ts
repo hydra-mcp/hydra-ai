@@ -5,6 +5,9 @@ export interface Message {
   createdAt: string;
 }
 
+// get the type of sender in Message
+export type MessageSender = Message['sender'];
+
 export interface Chat {
   id: string;
   title: string;
