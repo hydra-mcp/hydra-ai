@@ -224,7 +224,46 @@ module.exports = {
           "50%": {
             textShadow: "0 0 2px #fff, 0 0 2px #fff, 0 0 2px #fff, 0 0 4px #0e65ff, 0 0 10px #0e65ff, 0 0 15px #0e65ff"
           }
-        }
+        },
+        "shimmer": {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(100%)" }
+        },
+        "light-sweep": {
+          "0%": {
+            transform: "translateX(-100%)",
+            background: "linear-gradient(90deg, transparent, rgba(79, 70, 229, 0.4) 50%, transparent 100%)"
+          },
+          "20%": {
+            background: "linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.5) 50%, transparent 100%)"
+          },
+          "40%": {
+            transform: "translateX(80%)",
+            background: "linear-gradient(90deg, transparent, rgba(129, 140, 248, 0.5) 50%, transparent 100%)"
+          },
+          "40.001%": { opacity: "0.7" },
+          "40.002%": {
+            transform: "translateX(-100%)",
+            opacity: "0",
+            background: "linear-gradient(90deg, transparent, rgba(79, 70, 229, 0.4) 50%, transparent 100%)"
+          },
+          "50%": {
+            opacity: "0.3",
+            background: "linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.4) 50%, transparent 100%)"
+          },
+          "75%": {
+            background: "linear-gradient(90deg, transparent, rgba(129, 140, 248, 0.45) 50%, transparent 100%)"
+          },
+          "100%": {
+            transform: "translateX(-40%)",
+            opacity: "0.7",
+            background: "linear-gradient(90deg, transparent, rgba(79, 70, 229, 0.4) 50%, transparent 100%)"
+          }
+        },
+        "pulse-gentle": {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.85" }
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -245,7 +284,10 @@ module.exports = {
         "text-glow": "text-glow 3s ease-in-out infinite",
         "letter-float": "letter-float 3s ease-in-out infinite",
         "title-reveal": "title-reveal 1s ease-out forwards",
-        "neon-pulse": "neon-pulse 2s ease-in-out infinite"
+        "neon-pulse": "neon-pulse 2s ease-in-out infinite",
+        "shimmer": "shimmer 2s infinite linear",
+        "light-sweep": "light-sweep 4s cubic-bezier(0.4, 0, 0.2, 1) infinite",
+        "pulse-gentle": "pulse-gentle 2.5s ease-in-out infinite",
       },
       typography: {
         DEFAULT: {
@@ -282,6 +324,9 @@ module.exports = {
             },
           },
         },
+      },
+      backgroundImage: {
+        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
       },
     },
   },

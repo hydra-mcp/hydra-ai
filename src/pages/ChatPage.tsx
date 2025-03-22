@@ -250,22 +250,14 @@ export function ChatPage() {
                 updatedMessages,
                 (chunk) => {
                     //  SSE 
-                    console.log("Received chunk:", chunk); // 
-
                     try {
                         const jsonData = JSON.parse(chunk);
-                        console.log("Parsed JSON data:", jsonData); // 
 
                         // stage - typestage
                         if (jsonData.type === 'stage') {
                             // state
                             //  content  stage， ， content ，
                             setProcessingStage(prevStages => {
-                                // content，contentstage
-                                // if (jsonData.content === '') {
-                                //     return prevStages.filter(stage => stage.content !== jsonData.content);
-                                // }
-
                                 const existingStage = prevStages.find(stage => stage.content === jsonData.content);
                                 if (existingStage) {
                                     // contentstage，
@@ -285,22 +277,19 @@ export function ChatPage() {
                                     }];
                                 }
                             });
-                            console.log("Processing stage:", jsonData.content); // 
-                            return; // ，
+                            return;
                         }
 
-                        // 
                         switch (jsonData.type) {
                             case 'content':
-                                //  - 
                                 if (jsonData.content) {
+                                    console.log("content", jsonData.content);
                                     handleContentUpdate(jsonData.content);
                                     hasReceivedContent = true;
                                 }
                                 break;
 
                             case 'error':
-                                // 
                                 console.error("Error from API:", jsonData.error);
                                 toast({
                                     title: 'Error',
@@ -308,7 +297,6 @@ export function ChatPage() {
                                     duration: 3000,
                                 });
 
-                                // AI
                                 updateChat(currentChatId, {
                                     messages: [...updatedMessages, {
                                         ...aiMessage,
@@ -319,13 +307,10 @@ export function ChatPage() {
                                 break;
 
                             case 'done':
-                                //  - onmessage[DONE]
                                 console.log("Stream completed");
                                 break;
 
                             default:
-                                // 
-                                // delta
                                 if (jsonData.choices && jsonData.choices[0]?.delta?.content) {
                                     const content = jsonData.choices[0].delta.content;
                                     if (content) {
@@ -335,7 +320,6 @@ export function ChatPage() {
                                 }
                         }
                     } catch (e) {
-                        // JSON，
                         console.log("JSON parse error, using raw chunk:", e); // 
                         if (typeof chunk === 'string' && chunk.trim()) {
                             // ，
@@ -346,7 +330,6 @@ export function ChatPage() {
                 }
             );
 
-            // ，
             if (!hasReceivedContent) {
                 handleContentUpdate("，。");
             }
@@ -360,6 +343,7 @@ export function ChatPage() {
             setTimeout(() => setPlayReceivedSound(false), 300);
         } catch (error) {
             // Handle error
+            console.error("Error from API:", error);
             setIsStreaming(false);
             setProcessingStage([]);
             toast({
@@ -383,27 +367,42 @@ export function ChatPage() {
     const handleContentUpdate = (content: string) => {
         if (!content || !currentChatId) return;
 
-        // 
         setStreamingContent(prev => {
             const newContent = prev + content;
 
             //  - AI
-            if (currentChat?.messages && currentChat.messages.length > 0) {
-                const lastMessage = currentChat.messages[currentChat.messages.length - 1];
+            if (currentChat) {
+                const messages = currentChat.messages || [];
 
-                // AI，
-                if (lastMessage.sender === 'ai') {
-                    updateChat(currentChatId, {
-                        messages: [...currentChat.messages.slice(0, -1), {
-                            ...lastMessage,
-                            content: newContent,
-                        }],
-                        updatedAt: new Date().toLocaleString(),
-                    });
+                // 如果有消息且最后一条是AI消息，则更新该消息
+                if (messages.length > 0) {
+                    const lastMessage = messages[messages.length - 1];
+
+                    // AI，
+                    if (lastMessage.sender === 'ai') {
+                        updateChat(currentChatId, {
+                            messages: [...messages.slice(0, -1), {
+                                ...lastMessage,
+                                content: newContent,
+                            }],
+                            updatedAt: new Date().toLocaleString(),
+                        });
+                    } else {
+                        // 如果最后一条不是AI消息，添加新的AI消息
+                        updateChat(currentChatId, {
+                            messages: [...messages, {
+                                id: Date.now().toString(),
+                                content: newContent,
+                                sender: 'ai',
+                                createdAt: new Date().toLocaleString(),
+                            }],
+                            updatedAt: new Date().toLocaleString(),
+                        });
+                    }
                 } else {
-                    // AI，AI
+                    // 处理消息列表为空的情况
                     updateChat(currentChatId, {
-                        messages: [...currentChat.messages, {
+                        messages: [{
                             id: Date.now().toString(),
                             content: newContent,
                             sender: 'ai',
@@ -421,7 +420,7 @@ export function ChatPage() {
     // Auto-scroll effect
     useEffect(() => {
         // Don't auto-scroll if user is manually scrolling up
-        if (!isManualScrolling && currentChat?.messages.length > 0) {
+        if (!isManualScrolling) {
             const shouldSmoothScroll = !isStreaming;
             messagesEndRef.current?.scrollIntoView({
                 behavior: shouldSmoothScroll ? 'smooth' : 'auto'

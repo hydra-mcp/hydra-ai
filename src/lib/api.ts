@@ -3,8 +3,9 @@ import { Chat, Message, OpenAIResponse } from '@/types/chat';
 import { triggerApiError } from '@/components/ErrorHandler';
 
 // Add type definition for SSE events
-interface SSEvent extends CustomEvent {
+interface SSEEvent extends CustomEvent {
   data?: string;
+  responseCode?: number;
 }
 
 // Development mock data
@@ -262,18 +263,52 @@ export async function sendStreamMessage(
 
       // Handle error
       source.addEventListener('error', function (e) {
-        const event = e as SSEvent;
+        const event = e as SSEEvent;
         const errorData = event.data || '';
+        let errorStatus = event.responseCode || 0;
         let errorMessage = 'Connection failed';
-        let errorStatus = 0;
 
         // Check if it is a 401 unauthorized error
-        if (errorData.includes('401') || errorData.includes('unauthorized') || errorData.includes('Unauthorized')) {
+        if (errorStatus == 401 || errorData.includes('401') || errorData.includes('unauthorized') || errorData.includes('Unauthorized')) {
           errorMessage = 'Session expired. Please login again.';
           errorStatus = 401;
 
+          // Close current connection
+          source.close();
+
+          // Notify client that we're attempting to refresh token
+          onChunk(JSON.stringify({
+            type: 'auth_refresh',
+            message: 'Attempting to refresh authentication token...'
+          }));
+
           // Try to refresh token
-          refreshTokenRequest().catch(() => {
+          refreshTokenRequest().then(() => {
+            // Token refresh succeeded, get new token
+            const newToken = getAccessToken();
+            if (!newToken) {
+              throw new Error('Token refresh failed');
+            }
+            sendStreamMessage(message, chatHistory, onChunk).then((response) => {
+              resolve(response);
+            }).catch((error) => {
+              reject(error);
+            });
+
+            // Instead of complex event listener transfer, 
+            // simply resolve with a retry message to let the client handle retrying
+            // resolve({
+            //   id: Date.now().toString(),
+            //   choices: [
+            //     {
+            //       message: {
+            //         content: "TOKEN_REFRESHED_RETRY_NEEDED",
+            //       },
+            //     },
+            //   ],
+            // });
+
+          }).catch(() => {
             // Refresh failed, clear token
             localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');
@@ -281,7 +316,21 @@ export async function sendStreamMessage(
 
             // Trigger global API error event, not redirect directly
             triggerApiError(errorMessage, 401, '/agent/chat/completions');
+
+            // Send error to client
+            onChunk(JSON.stringify({
+              type: 'error',
+              error: {
+                message: errorMessage,
+                type: 'auth_error',
+                status: errorStatus
+              }
+            }));
+
+            reject(new Error(errorMessage));
           });
+
+          return; // Return early to prevent double error handling
         } else {
           errorMessage = `Error: ${errorData}`;
         }
@@ -303,7 +352,7 @@ export async function sendStreamMessage(
 
       // Handle stage event (stage notification)
       source.addEventListener('stage', function (e) {
-        const event = e as SSEvent;
+        const event = e as SSEEvent;
         const data = event.data || '';
 
         try {
@@ -338,7 +387,7 @@ export async function sendStreamMessage(
 
       // Handle content event (content update)
       source.addEventListener('content', function (e) {
-        const event = e as SSEvent;
+        const event = e as SSEEvent;
         const data = event.data || '';
 
         try {
@@ -363,7 +412,7 @@ export async function sendStreamMessage(
 
       // Handle message event (default event, handle old format or message without specified event type)
       source.addEventListener('message', function (e) {
-        const event = e as SSEvent;
+        const event = e as SSEEvent;
         const data = event.data || '';
 
         // If it is a [DONE] message, handle completion

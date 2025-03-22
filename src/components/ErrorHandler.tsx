@@ -15,7 +15,20 @@ interface ApiErrorEvent extends CustomEvent {
 export function ErrorHandler() {
     const { toast } = useToast();
     const navigate = useNavigate();
-    const { logout } = useAuth();
+    // 使用try-catch包裹useAuth，防止在AuthProvider外部使用时报错
+    let authContext;
+    try {
+        authContext = useAuth();
+    } catch (error) {
+        console.warn('ErrorHandler: AuthContext not available', error);
+    }
+    // 从authContext中获取logout方法，如果不可用则提供一个空函数
+    const logout = authContext?.logout || (() => {
+        console.warn('Logout function not available, clearing local storage directly');
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('user_info');
+    });
 
     useEffect(() => {
         // Create a custom event listener to handle API errors
