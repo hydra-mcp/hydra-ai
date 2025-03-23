@@ -53,6 +53,15 @@ export function Login() {
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (username.trim() === '' || password.trim() === '') {
+            toast({
+                title: 'Login failed',
+                description: 'Username and password cannot be empty',
+                duration: 3000,
+            });
+            return;
+        }
+
         setIsLoading(true);
 
         try {
