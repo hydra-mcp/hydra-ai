@@ -1,6 +1,7 @@
 import { SSE } from '@/lib/sse';
 import { Chat, Message, OpenAIResponse } from '@/types/chat';
 import { triggerApiError } from '@/components/ErrorHandler';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Add type definition for SSE events
 interface SSEEvent extends CustomEvent {
@@ -71,14 +72,12 @@ export async function apiRequest<T>(
           throw new Error('Token refresh failed');
         }
 
-        const newHeaders = {
-          ...headers,
-          'Authorization': `Bearer ${newToken}`,
-        };
-
         const retryResponse = await fetch(url, {
           ...options,
-          headers: newHeaders,
+          headers: {
+            ...headers,
+            'Authorization': `Bearer ${newToken}`,
+          },
         });
 
         if (!retryResponse.ok) {
@@ -96,8 +95,8 @@ export async function apiRequest<T>(
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('user_info');
 
-        // Trigger global API error event, not redirect directly
-        triggerApiError('Authentication failed, please login again', 401, endpoint);
+        // 重定向到登录页面
+        window.location.href = '/login';
 
         throw new Error('Authentication failed, please login again');
       }
@@ -144,6 +143,14 @@ export async function apiRequest<T>(
     }
   } catch (error) {
     console.error('API request error:', error);
+
+    // 检查是否是认证错误，如果是则重定向到登录页面
+    if (error instanceof Error &&
+      (error.message.includes('Authentication failed') ||
+        error.message.includes('Token refresh failed'))) {
+      window.location.href = '/login';
+    }
+
     throw error;
   }
 }
