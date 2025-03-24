@@ -24,6 +24,7 @@ interface AuthContextType {
     getToken: () => string | null;
     getCurrentUser: () => Promise<UserInfo | null>;
     loading: boolean;
+    redirectToLogin: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -185,6 +186,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
+    // 添加重定向到登录页面的函数
+    const redirectToLogin = () => {
+        // 使用 window.location.href 进行重定向，确保清除当前页面状态
+        window.location.href = '/login';
+    };
+
     const logout = () => {
         // Clear all tokens and user information in localStorage
         localStorage.removeItem('access_token');
@@ -195,7 +202,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
         setLastUserFetch(0);
 
-        // Do not redirect here, let the application handle redirection based on routes
+        // 在登出时重定向到登录页面
+        redirectToLogin();
     };
 
     const getToken = () => {
@@ -211,7 +219,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             refreshToken,
             getToken,
             getCurrentUser,
-            loading
+            loading,
+            redirectToLogin
         }}>
             {children}
         </AuthContext.Provider>
