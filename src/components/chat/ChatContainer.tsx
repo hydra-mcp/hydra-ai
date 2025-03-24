@@ -21,6 +21,9 @@ interface ChatContainerProps {
     processingStage?: Array<ProcessingStage>;
 }
 
+// 优化性能：对消息气泡组件进行记忆化处理，避免不必要的重新渲染
+const MemoizedMessageBubble = memo(MessageBubble);
+
 export const ChatContainer = memo(({
     currentChat,
     isStreaming,
@@ -101,7 +104,7 @@ export const ChatContainer = memo(({
         <div className="flex h-full flex-col">
             <div className="flex-1 space-y-4 p-4">
                 {currentChat.messages.map((message, index) => (
-                    <MessageBubble
+                    <MemoizedMessageBubble
                         key={`${message.id}-${isStreaming && index === currentChat.messages.length - 1 ? Date.now() : 'static'}`}
                         message={message}
                         isStreaming={isStreaming && index === currentChat.messages.length - 1 && message.sender === 'ai'}
